@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects &amp; Repositories — Amirreza</title>
+  <meta name="description" content="All public GitHub repositories by Amirreza, with their READMEs." />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="index.html" class="nav-brand"><i class="fa-solid fa-terminal"></i> amirreza</a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="articles.html">Articles</a>
+      <a href="repositories.html" class="active" aria-current="page">Projects &amp; Repositories</a>
+      <a href="certificates.html">Certificates &amp; Experiences</a>
+    </div>
+  </nav>
+
+  <section class="section">
+    <h2 class="section-title"><i class="fa-brands fa-github"></i> Projects &amp; Repositories</h2>
+    <p class="section-sub">All my public repositories, loaded live from GitHub with their READMEs.</p>
+
+    <p class="repos-status" id="repos-status">Loading repositories…</p>
+    <div class="repo-list" id="repos-list"></div>
+  </section>
+
+  <footer>
+    <i class="fa-solid fa-code"></i> Built by Amirreza · hosted on GitHub Pages
+  </footer>
+
+  <script>
+    const GH_USER = 'amirow-unknown';
+
+    const reposList   = document.getElementById('repos-list');
+    const reposStatus = document.getElementById('repos-status');
+
+    const LANG_COLORS = {
+      JavaScript:'#f1e05a', TypeScript:'#3178c6', Python:'#3572A5', HTML:'#e34c26',
+      CSS:'#563d7c', SCSS:'#c6538c', Shell:'#89e051', Bash:'#89e051', C:'#555555',
+      'C++':'#f34b7d', 'C#':'#178600', Go:'#00ADD8', Rust:'#dea584', Java:'#b07219',
+      PHP:'#4F5D95', Ruby:'#701516', Vue:'#41b883', Dockerfile:'#384d54',
+      Makefile:'#427819', Lua:'#000080', Kotlin:'#A97BFF', Swift:'#F05138'
+    };
+
+    function fmtDate(iso){
+      if (!iso) return '';
+      try {
+        return new Date(iso).toLocaleDateString('en', { year:'numeric', month:'short', day:'numeric' });
+      } catch (e) { return ''; }
+    }
+
+    async function ghFetch(url, accept){
+      const res = await fetch(url, { headers: { 'Accept': accept || 'application/vnd.github+json' } });
+      if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0'){
+        const reset = Number(res.headers.get('x-ratelimit-reset') || 0) * 1000;
+        const err = new Error('RATE_LIMIT');
+        err.reset = reset;
+        throw err;
+      }
+      if (res.status === 404) throw new Error('NOT_FOUND');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res;
+    }
+
+    async function withConcurrency(items, limit, worker){
+      let i = 0;
+      const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (i < items.length){
+          const item = items[i++];
+          await worker(item);
+        }
+      });
+      await Promise.all(runners);
+    }
+
+    function metaItem(iconClass, text){
+      const span = document.createElement('span');
+      const i = document.createElement('i');
+      i.className = iconClass;
+      span.appendChild(i);
+      span.appendChild(document.createTextNode(text));
+      return span;
+    }
+
+    function buildRepoCard(repo){
+      const card = document.createElement('article');
+      card.className = 'card';
+
+      const head = document.createElement('div');
+      head.className = 'card-head';
+
+      const icon = document.createElement('i');
+      icon.className = 'fa-brands fa-github card-icon';
+      head.appendChild(icon);
+
+      const h3 = document.createElement('h3');
+      const link = document.createElement('a');
+      link.href = repo.html_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = repo.name;
+      h3.appendChild(link);
+      head.appendChild(h3);
+
+      if (repo.fork){
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = 'fork';
+        head.appendChild(b);
+      }
+      if (repo.archived){
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = 'archived';
+        head.appendChild(b);
+      }
+
+      const open = document.createElement('a');
+      open.className = 'open-link';
+      open.href = repo.html_url;
+      open.target = '_blank';
+      open.rel = 'noopener noreferrer';
+      open.innerHTML = 'Open <i class="fa-solid fa-arrow-up-right-from-square"></i>';
+      head.appendChild(open);
+
+      card.appendChild(head);
+
+      const desc = document.createElement('p');
+      desc.className = 'card-desc';
+      desc.textContent = repo.description || 'No description provided.';
+      card.appendChild(desc);
+
+      const meta = document.createElement('div');
+      meta.className = 'card-meta';
+
+      if (repo.language){
+        const lang = document.createElement('span');
+        const dot = document.createElement('i');
+        dot.className = 'dot';
+        dot.style.background = LANG_COLORS[repo.language] || '#a855f7';
+        lang.appendChild(dot);
+        lang.appendChild(document.createTextNode(repo.language));
+        meta.appendChild(lang);
+      }
+
+      meta.appendChild(metaItem('fa-regular fa-star', String(repo.stargazers_count)));
+      meta.appendChild(metaItem('fa-solid fa-code-fork', String(repo.forks_count)));
+      meta.appendChild(metaItem('fa-regular fa-clock', 'Updated ' + fmtDate(repo.pushed_at)));
+
+      card.appendChild(meta);
+
+      const readme = document.createElement('div');
+      readme.className = 'readme';
+      readme.id = 'readme-' + repo.id;
+      readme.innerHTML = '<div class="readme-inner"><p class="readme-empty">Loading README…</p></div>';
+      card.appendChild(readme);
+
+      return card;
+    }
+
+    async function loadReadme(repo){
+      const box = document.getElementById('readme-' + repo.id);
+      if (!box) return;
+      try {
+        const res = await ghFetch(
+          'https://api.github.com/repos/' + GH_USER + '/' + repo.name + '/readme',
+          'application/vnd.github.html+json'
+        );
+        const html = await res.text();
+        if (html && html.trim().length){
+          box.innerHTML = '<div class="readme-inner">' + html + '</div>';
+        } else {
+          box.innerHTML = '<div class="readme-inner"><p class="readme-empty">This repository has no README.</p></div>';
+        }
+      } catch (err){
+        let msg = 'Could not load README.';
+        if (err.message === 'NOT_FOUND') msg = 'No README found for this repository.';
+        else if (err.message === 'RATE_LIMIT') msg = 'GitHub API rate limit reached — please refresh in a bit.';
+        box.innerHTML = '<div class="readme-inner"><p class="readme-empty">' + msg + '</p></div>';
+      }
+    }
+
+    async function loadRepositories(){
+      try {
+        const res = await ghFetch(
+          'https://api.github.com/users/' + GH_USER + '/repos?per_page=100&sort=pushed'
+        );
+        const all = await res.json();
+
+        const repos = all
+          .filter(r => !r.private)
+          .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at));
+
+        if (!repos.length){
+          reposStatus.textContent = 'No public repositories yet.';
+          return;
+        }
+
+        reposStatus.textContent =
+          repos.length + ' public repositor' + (repos.length === 1 ? 'y' : 'ies') + ' · READMEs load automatically';
+
+        repos.forEach(repo => reposList.appendChild(buildRepoCard(repo)));
+        await withConcurrency(repos, 4, loadReadme);
+
+      } catch (err){
+        if (err.message === 'RATE_LIMIT'){
+          const when = err.reset ? new Date(err.reset).toLocaleTimeString() : 'later';
+          reposStatus.textContent = 'GitHub API rate limit reached. Repositories will load again after ' + when + '.';
+        } else {
+          reposStatus.textContent = 'Could not load repositories right now. Please try again later.';
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadRepositories);
+  </script>
+</body>
+</html>
